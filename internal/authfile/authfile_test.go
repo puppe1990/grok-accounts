@@ -132,3 +132,52 @@ func TestParseErrorsWhenNoIdentityPresent(t *testing.T) {
 		t.Errorf("Parse() error = %v, want ErrNoIdentity", err)
 	}
 }
+
+func TestDisplayNameDropsTrailingSurnameRepeatedFromFirstName(t *testing.T) {
+	id := Identity{FirstName: "Gabriel F Dos Santos", LastName: "Fontoura Dos Santos"}
+
+	if got, want := id.DisplayName(), "Gabriel F Dos Santos Fontoura"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayNameDropsSurnameEqualToOneInFirstName(t *testing.T) {
+	id := Identity{FirstName: "Maria Silva", LastName: "Silva"}
+
+	if got, want := id.DisplayName(), "Maria Silva"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayNameDeduplicatesIgnoringCase(t *testing.T) {
+	id := Identity{FirstName: "maria silva", LastName: "Silva"}
+
+	if got, want := id.DisplayName(), "maria silva"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayNameMergesOverlappingTokens(t *testing.T) {
+	id := Identity{FirstName: "Joao Pedro", LastName: "Pedro Almeida"}
+
+	if got, want := id.DisplayName(), "Joao Pedro Almeida"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayNameHandlesRepeatedNameInBothFields(t *testing.T) {
+	id := Identity{FirstName: "Dev", LastName: "Dev"}
+
+	if got, want := id.DisplayName(), "Dev"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayNameUsesWhicheverFieldIsPresent(t *testing.T) {
+	if got, want := (Identity{FirstName: "Dev"}).DisplayName(), "Dev"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+	if got, want := (Identity{LastName: "Example"}).DisplayName(), "Example"; got != want {
+		t.Errorf("DisplayName() = %q, want %q", got, want)
+	}
+}

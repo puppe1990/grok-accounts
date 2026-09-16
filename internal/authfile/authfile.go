@@ -27,7 +27,39 @@ type Identity struct {
 }
 
 func (i Identity) DisplayName() string {
-	return strings.TrimSpace(i.FirstName + " " + i.LastName)
+	return joinName(i.FirstName, i.LastName)
+}
+
+func joinName(first, last string) string {
+	ft := strings.Fields(first)
+	lt := strings.Fields(last)
+
+	for n := min(len(ft), len(lt)); n > 0; n-- {
+		if equalTokens(ft[len(ft)-n:], lt[:n]) {
+			lt = lt[n:]
+			break
+		}
+	}
+	for n := min(len(ft), len(lt)); n > 0; n-- {
+		if equalTokens(ft[len(ft)-n:], lt[len(lt)-n:]) {
+			lt = lt[:len(lt)-n]
+			break
+		}
+	}
+
+	name := make([]string, 0, len(ft)+len(lt))
+	name = append(name, ft...)
+	name = append(name, lt...)
+	return strings.Join(name, " ")
+}
+
+func equalTokens(a, b []string) bool {
+	for i := range a {
+		if !strings.EqualFold(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 type entry struct {
