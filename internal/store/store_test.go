@@ -123,7 +123,7 @@ func TestSaveErrorsWhenAuthHasNoIdentity(t *testing.T) {
 }
 
 func TestSaveWritesFilesWithOwnerOnlyPermissions(t *testing.T) {
-	s := &Store{Dir: filepath.Join(t.TempDir(), "accounts"), Now: func() time.Time { return time.Now() }}
+	s := &Store{Dir: filepath.Join(t.TempDir(), "accounts"), Now: time.Now}
 
 	if _, err := s.Save([]byte(devAuth), ""); err != nil {
 		t.Fatalf("Save() error = %v", err)
