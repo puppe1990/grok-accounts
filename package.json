@@ -1,6 +1,6 @@
 {
   "name": "grok-accounts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Account switcher for the Grok Build CLI (xAI)",
   "packageManager": "pnpm@11.24.0",
