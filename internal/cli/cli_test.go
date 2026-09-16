@@ -236,6 +236,31 @@ func TestRunSwitchReplacesLiveAuthFile(t *testing.T) {
 	}
 }
 
+func TestRunSwitchRestoresProfileContent(t *testing.T) {
+	env, _, _, home := newEnv(t)
+	raw := devAuth + "\n"
+	saveProfile(t, home, raw, "dev")
+	writeLive(t, home, opsAuth)
+
+	code := Run([]string{"switch", "dev"}, env)
+
+	if code != 0 {
+		t.Fatalf("Run(switch) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+	live, err := os.ReadFile(filepath.Join(home, "auth.json"))
+	if err != nil {
+		t.Fatalf("read auth.json: %v", err)
+	}
+	if got, want := strings.TrimSpace(string(live)), strings.TrimSpace(raw); got != want {
+		t.Errorf("auth.json = %q, want %q", got, want)
+	}
+	for _, want := range []string{"tok-dev", "team-dev", "2026-09-16T19:41:13Z"} {
+		if !strings.Contains(string(live), want) {
+			t.Errorf("auth.json lost %q after the switch:\n%s", want, live)
+		}
+	}
+}
+
 func TestRunSwitchSavesPreviousAccountFirst(t *testing.T) {
 	env, out, _, home := newEnv(t)
 	saveProfile(t, home, opsAuth, "ops")

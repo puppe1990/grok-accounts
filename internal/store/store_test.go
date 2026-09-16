@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,6 +42,40 @@ func TestSaveStoresProfileWithDerivedAlias(t *testing.T) {
 	}
 	if string(reloaded.Auth) != devAuth {
 		t.Errorf("stored auth = %q, want the raw auth.json bytes", reloaded.Auth)
+	}
+}
+
+func TestSavePreservesAuthContentApartFromSurroundingWhitespace(t *testing.T) {
+	s := newStore(t)
+	raw := "\n" + devAuth + "\n\n"
+
+	if _, err := s.Save([]byte(raw), "exato"); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	p, err := s.Find("exato")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if got, want := strings.TrimSpace(string(p.Auth)), strings.TrimSpace(raw); got != want {
+		t.Errorf("stored auth = %q, want %q", got, want)
+	}
+}
+
+func TestSavePreservesUnknownAuthFieldsAndTopLevelEntries(t *testing.T) {
+	s := newStore(t)
+	raw := `{"https://auth.x.ai::client": {"email": "dev@example.com", "future_field": {"nested": [1, 2]}}, "https://auth.x.ai::machine": {"principal_type": "Machine"}}`
+
+	if _, err := s.Save([]byte(raw), "futuro"); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	p, err := s.Find("futuro")
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if string(p.Auth) != raw {
+		t.Errorf("stored auth = %q, want %q", p.Auth, raw)
 	}
 }
 
