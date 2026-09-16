@@ -8,4 +8,6 @@ if [ -n "$out" ]; then
 	exit 1
 fi
 
+pnpm exec prettier --check .
+
 go test ./...

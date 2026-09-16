@@ -1,15 +1,23 @@
 GO ?= go
+PNPM ?= pnpm
 BIN := bin/grok-accounts
 
-.PHONY: verify fmt-check vet test build install clean
+.PHONY: verify deps fmt-check vet lint test build install clean
 
-verify: fmt-check vet test build
+verify: fmt-check vet lint test build
+
+deps:
+	$(PNPM) install --frozen-lockfile
 
 fmt-check:
 	@out="$$(gofmt -l .)"; if [ -n "$$out" ]; then echo "gofmt pendente em:"; echo "$$out"; exit 1; fi
+	$(PNPM) exec prettier --check .
 
 vet:
 	$(GO) vet ./...
+
+lint:
+	golangci-lint run
 
 test:
 	$(GO) test ./...

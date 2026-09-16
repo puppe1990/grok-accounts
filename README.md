@@ -57,11 +57,11 @@ internal/cli/                 comandos, Env injetável (stdout/stderr/relógio/l
 
 Arquivos em disco:
 
-| Caminho | Conteúdo |
-|---|---|
-| `$GROK_HOME/auth.json` | sessão ativa (gerenciado pelo `grok`; o switcher só substitui) |
-| `$GROK_HOME/accounts/<apelido>.json` | snapshots das contas (`0600`, pasta `0700`) |
-| `$GROK_HOME` | `$GROK_HOME` se definido, senão `~/.grok` |
+| Caminho                              | Conteúdo                                                       |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `$GROK_HOME/auth.json`               | sessão ativa (gerenciado pelo `grok`; o switcher só substitui) |
+| `$GROK_HOME/accounts/<apelido>.json` | snapshots das contas (`0600`, pasta `0700`)                    |
+| `$GROK_HOME`                         | `$GROK_HOME` se definido, senão `~/.grok`                      |
 
 Exit codes: `0` sucesso, `1` erro de execução (perfil não encontrado, nada logado, JSON inválido), `2` erro de uso.
 
@@ -76,21 +76,24 @@ Exit codes: `0` sucesso, `1` erro de execução (perfil não encontrado, nada lo
 Testes escritos antes da implementação (TDD, ciclo red → green → refactor):
 
 ```sh
-make verify      # gofmt -l + go vet + go test ./... + go build
+pnpm install     # deps de formatação (prettier)
+make verify      # gofmt + prettier --check + go vet + golangci-lint + go test ./... + go build
 make test
 ```
 
-| Pacote | O que cobre |
-|---|---|
-| `internal/authfile` | parse do formato real do auth.json (inclui entradas sem e-mail, expiry inválido, JSON corrompido), escrita atômica com `0600` e sem arquivos temporários órfãos |
-| `internal/store` | slug de apelido (inclui tentativa de path traversal), conflito de apelido entre contas, refresh do mesmo perfil, permissões, list ordenado, perfis corrompidos |
-| `internal/cli` | cada comando com `Env` injetado: marcador de conta ativa, auto-snapshot antes de `switch`/`login`, no-op ao trocar para a conta já ativa, falha do `grok login`, wiring do `--device-auth`, exit codes |
+| Pacote              | O que cobre                                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `internal/authfile` | parse do formato real do auth.json (inclui entradas sem e-mail, expiry inválido, JSON corrompido), escrita atômica com `0600` e sem arquivos temporários órfãos                                        |
+| `internal/store`    | slug de apelido (inclui tentativa de path traversal), conflito de apelido entre contas, refresh do mesmo perfil, permissões, list ordenado, perfis corrompidos                                         |
+| `internal/cli`      | cada comando com `Env` injetado: marcador de conta ativa, auto-snapshot antes de `switch`/`login`, no-op ao trocar para a conta já ativa, falha do `grok login`, wiring do `--device-auth`, exit codes |
 
 ## CI e hooks
 
-- `.github/workflows/ci.yml`: roda `make verify` em push para `main` e em pull requests.
-- `.githooks/pre-commit`: `gofmt -l` + `go test ./...` (checks rápidos, locais).
+- `.github/workflows/ci.yml`: `pnpm install --frozen-lockfile`, instala o golangci-lint e roda `make verify` em push para `main` e em pull requests.
+- `.githooks/pre-commit`: `gofmt -l` + `prettier --check` + `go test ./...` — só os checks rápidos; lint e build ficam no `make verify`/CI.
 
 ```sh
 git config core.hooksPath .githooks
 ```
+
+Ferramentas: Go 1.26 (`gofmt`, `go vet`, `golangci-lint` v2) cuida do código Go; prettier 3 (pnpm 11, versão pinada em `packageManager`) formata markdown/yaml/json.

@@ -19,30 +19,27 @@ func WriteAtomic(path string, raw []byte) error {
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
+	name := tmp.Name()
 
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
+	err = writeContents(tmp, raw)
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(name, path)
+	}
+	if err != nil {
+		_ = os.Remove(name)
+	}
+	return err
+}
+
+func writeContents(f *os.File, raw []byte) error {
+	if err := f.Chmod(0o600); err != nil {
 		return err
 	}
-	if _, err := tmp.Write(raw); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
+	if _, err := f.Write(raw); err != nil {
 		return err
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return nil
+	return f.Sync()
 }

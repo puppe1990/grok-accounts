@@ -44,7 +44,7 @@ type entry struct {
 func Parse(raw []byte) ([]Identity, error) {
 	var entries map[string]entry
 	if err := json.Unmarshal(raw, &entries); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
 	ids := make([]Identity, 0, len(entries))
