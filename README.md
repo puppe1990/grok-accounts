@@ -7,7 +7,7 @@ Account switcher for the **Grok Build CLI** (xAI's `grok` binary). It keeps cred
 `grok` stores your session in `~/.grok/auth.json` (or `$GROK_HOME/auth.json`) and hot-reloads that file — no CLI restart needed after a switch. `grok-accounts`:
 
 - reads the active `auth.json` and extracts the identity (email, name, team, expiry);
-- saves the raw file bytes as a profile at `~/.grok/accounts/<alias>.json` (mode `0600`, bytes preserved);
+- saves the file contents as a profile at `~/.grok/accounts/<alias>.json` (mode `0600`; every entry, field and its order are preserved — only whitespace surrounding the file is normalized);
 - on switch, writes the chosen profile back into `auth.json` atomically (temp file + rename, `0600`), snapshotting the previously active account first.
 
 ## Install
