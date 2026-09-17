@@ -63,6 +63,13 @@ func runList(args []string, env Env) int {
 	}
 
 	live := env.live()
+	switch {
+	case live.ReadErr != nil:
+		fmt.Fprintf(env.Stderr, "aviso: não foi possível ler o auth.json (%v); a conta ativa não será marcada\n", live.ReadErr)
+	case live.ParseErr != nil:
+		fmt.Fprintf(env.Stderr, "aviso: o auth.json está ilegível (%v); a conta ativa não será marcada\n", live.ParseErr)
+	}
+
 	tw := tabwriter.NewWriter(env.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "ALIAS\tCONTA\tEXPIRA")
 	for _, p := range profiles {
@@ -137,11 +144,17 @@ func runLogin(args []string, env Env) int {
 	alias := flags.String("alias", "", "apelido do perfil")
 	deviceAuth := flags.Bool("device-auth", false, "login por código de dispositivo (SSH/remoto)")
 	deviceCode := flags.Bool("device-code", false, "alias de --device-auth")
+	incognito := flags.Bool("incognito", false, "abre o login em uma janela anônima (macOS)")
+	browserName := flags.String("browser", "", "navegador da janela anônima (ex.: Google Chrome)")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(env.Stderr, "uso: grok-accounts login [--alias NOME] [--device-auth]\n")
+		fmt.Fprintf(env.Stderr, "uso: grok-accounts login [--alias NOME] [--device-auth] [--incognito [--browser NOME]]\n")
+		return 2
+	}
+	if *browserName != "" && !*incognito {
+		fmt.Fprintln(env.Stderr, "uso: --browser só faz sentido junto com --incognito")
 		return 2
 	}
 	if env.RunLogin == nil {
@@ -163,7 +176,12 @@ func runLogin(args []string, env Env) int {
 		}
 	}
 
-	if err := env.RunLogin(*deviceAuth || *deviceCode); err != nil {
+	opts := LoginOptions{
+		DeviceAuth: *deviceAuth || *deviceCode || *incognito,
+		Incognito:  *incognito,
+		Browser:    *browserName,
+	}
+	if err := env.RunLogin(opts); err != nil {
 		fmt.Fprintf(env.Stderr, "grok login falhou: %v\n", err)
 		return 1
 	}
@@ -171,6 +189,15 @@ func runLogin(args []string, env Env) int {
 	live = env.live()
 	if code, ok := requireLive(live, env); !ok {
 		return code
+	}
+
+	if *alias == "" {
+		active, err := autoSave(env.store(), live.Raw)
+		if err != nil {
+			return reportStoreError(err, env)
+		}
+		fmt.Fprintf(env.Stdout, "Conta ativa agora: %s (perfil %q)\n", live.ID.Email, active)
+		return 0
 	}
 
 	profile, err := env.store().Save(live.Raw, *alias)
@@ -197,6 +224,7 @@ func runSwitch(args []string, env Env) int {
 		fmt.Fprintf(env.Stderr, "erro ao ler os perfis: %v\n", err)
 		return 1
 	}
+	warnIfExpired(profile, env)
 
 	live := env.live()
 	if live.ReadErr != nil {
@@ -310,11 +338,27 @@ func reportStoreError(err error, env Env) int {
 }
 
 func profileExpiry(p store.Profile) string {
-	ids, err := authfile.Parse(p.Auth)
-	if err != nil {
+	exp, ok := profileExpiryTime(p)
+	if !ok {
 		return "-"
 	}
-	return formatExpiry(ids[0].ExpiresAt)
+	return formatExpiry(exp)
+}
+
+func profileExpiryTime(p store.Profile) (time.Time, bool) {
+	ids, err := authfile.Parse(p.Auth)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return ids[0].ExpiresAt, !ids[0].ExpiresAt.IsZero()
+}
+
+func warnIfExpired(p store.Profile, env Env) {
+	exp, ok := profileExpiryTime(p)
+	if !ok || !exp.Before(env.now()) {
+		return
+	}
+	fmt.Fprintf(env.Stderr, "aviso: o token do perfil %q expirou em %s; o grok tenta renovar sozinho — se falhar, rode grok-accounts login\n", p.Alias, formatExpiry(exp))
 }
 
 func describe(id authfile.Identity) string {

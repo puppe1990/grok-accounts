@@ -26,7 +26,7 @@ make build            # builds bin/grok-accounts
 grok-accounts list                    # saved profiles (* = active account)
 grok-accounts current                 # account in use right now
 grok-accounts add [--alias NAME]      # saves the logged-in account as a profile
-grok-accounts login [--alias NAME] [--device-auth]
+grok-accounts login [--alias NAME] [--device-auth] [--incognito [--browser NAME]]
                                       # delegates login to grok, then saves the profile
 grok-accounts switch <profile|email>  # switches the active account
 grok-accounts remove <profile|email>  # deletes a saved profile
@@ -46,11 +46,14 @@ grok-accounts switch personal         # back to the first account
 
 On SSH or machines without a browser: `grok-accounts login --device-auth --alias client`.
 
+To sign in with another account without reusing the session already open in your default browser, add `--incognito`: it runs the device-code flow and opens the printed URL in a private window (Brave, Chrome, Chrome Canary, Edge, Firefox and Opera are recognized; override with `--browser "Google Chrome"`). macOS only.
+
 ## Layout
 
 ```
 cmd/grok-accounts/main.go     wiring: resolves $GROK_HOME, runs `grok login`, os.Exit
 internal/authfile/            auth.json reading/atomic writing + identity parsing
+internal/browser/             default-browser detection + private-window launch (macOS)
 internal/store/               profiles: save, list, find, remove, alias slug
 internal/cli/                 commands, injectable Env (stdout/stderr/clock/login), exit codes
 ```
@@ -84,6 +87,7 @@ make test
 | Package             | What it covers                                                                                                                                                                                                   |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `internal/authfile` | parsing of the real auth.json shape (entries without email, invalid expiry, corrupt JSON), atomic writes with `0600` and no leftover temp files                                                                  |
+| `internal/browser`  | default browser resolution from the LaunchServices handlers, private-window argv per browser, device-code URL watcher (stream passthrough, first URL opened once)                                                |
 | `internal/store`    | alias slug (including a path traversal attempt), alias conflicts between accounts, refreshing the same profile, permissions, sorted list, corrupt profiles                                                       |
 | `internal/cli`      | every command with an injected `Env`: active-account marker, auto-snapshot before `switch`/`login`, no-op when switching to the already active account, `grok login` failure, `--device-auth` wiring, exit codes |
 

@@ -402,7 +402,7 @@ func TestRunRemoveFailsWhenProfileIsMissing(t *testing.T) {
 func TestRunLoginSnapshotsPreviousAndNewAccounts(t *testing.T) {
 	env, out, _, home := newEnv(t)
 	writeLive(t, home, devAuth)
-	env.RunLogin = func(deviceAuth bool) error {
+	env.RunLogin = func(LoginOptions) error {
 		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
 	}
 
@@ -428,7 +428,7 @@ func TestRunLoginSnapshotsPreviousAndNewAccounts(t *testing.T) {
 
 func TestRunLoginUsesDerivedAliasWithoutFlag(t *testing.T) {
 	env, _, _, home := newEnv(t)
-	env.RunLogin = func(deviceAuth bool) error {
+	env.RunLogin = func(LoginOptions) error {
 		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
 	}
 
@@ -442,24 +442,24 @@ func TestRunLoginUsesDerivedAliasWithoutFlag(t *testing.T) {
 
 func TestRunLoginPassesDeviceAuthFlag(t *testing.T) {
 	env, _, _, home := newEnv(t)
-	var gotDeviceAuth bool
-	env.RunLogin = func(deviceAuth bool) error {
-		gotDeviceAuth = deviceAuth
+	var got LoginOptions
+	env.RunLogin = func(opts LoginOptions) error {
+		got = opts
 		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
 	}
 
 	if code := Run([]string{"login", "--device-auth"}, env); code != 0 {
 		t.Fatalf("Run(login --device-auth) = %d, want 0 (stderr: %s)", code, env.Stderr)
 	}
-	if !gotDeviceAuth {
-		t.Error("RunLogin() was not called with deviceAuth=true")
+	if !got.DeviceAuth {
+		t.Error("RunLogin() was not called with DeviceAuth=true")
 	}
 }
 
 func TestRunLoginFailsWhenGrokLoginFails(t *testing.T) {
 	env, _, errOut, home := newEnv(t)
 	writeLive(t, home, devAuth)
-	env.RunLogin = func(deviceAuth bool) error { return errors.New("exit status 1") }
+	env.RunLogin = func(LoginOptions) error { return errors.New("exit status 1") }
 
 	code := Run([]string{"login"}, env)
 
@@ -471,6 +471,145 @@ func TestRunLoginFailsWhenGrokLoginFails(t *testing.T) {
 	}
 	if _, err := newStore(home).Find("dev"); err != nil {
 		t.Errorf("account active before login was not snapshotted: %v", err)
+	}
+}
+
+func TestRunLoginAcceptsDeviceCodeAlias(t *testing.T) {
+	env, _, _, home := newEnv(t)
+	var got LoginOptions
+	env.RunLogin = func(opts LoginOptions) error {
+		got = opts
+		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
+	}
+
+	if code := Run([]string{"login", "--device-code"}, env); code != 0 {
+		t.Fatalf("Run(login --device-code) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+	if !got.DeviceAuth {
+		t.Error("RunLogin() was not called with DeviceAuth=true")
+	}
+}
+
+func TestRunLoginIncognitoForcesDeviceAuthAndForwardsBrowser(t *testing.T) {
+	env, _, _, home := newEnv(t)
+	var got LoginOptions
+	env.RunLogin = func(opts LoginOptions) error {
+		got = opts
+		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
+	}
+
+	code := Run([]string{"login", "--incognito", "--browser", "Google Chrome"}, env)
+
+	if code != 0 {
+		t.Fatalf("Run(login --incognito) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+	want := LoginOptions{DeviceAuth: true, Incognito: true, Browser: "Google Chrome"}
+	if got != want {
+		t.Errorf("RunLogin() opts = %+v, want %+v", got, want)
+	}
+}
+
+func TestRunLoginRejectsBrowserWithoutIncognito(t *testing.T) {
+	env, _, errOut, _ := newEnv(t)
+	env.RunLogin = func(LoginOptions) error { return nil }
+
+	code := Run([]string{"login", "--browser", "Google Chrome"}, env)
+
+	if code != 2 {
+		t.Fatalf("Run(login --browser) = %d, want 2", code)
+	}
+	if !strings.Contains(errOut.String(), "uso:") {
+		t.Errorf("stderr = %q, want usage", errOut.String())
+	}
+}
+
+func TestRunLoginRefreshesExistingProfileWithoutAlias(t *testing.T) {
+	env, _, _, home := newEnv(t)
+	saveProfile(t, home, opsAuth, "cliente")
+	env.RunLogin = func(LoginOptions) error {
+		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(opsAuth), 0o600)
+	}
+
+	if code := Run([]string{"login"}, env); code != 0 {
+		t.Fatalf("Run(login) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+
+	profiles, err := newStore(home).List()
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(profiles) != 1 || profiles[0].Alias != "cliente" {
+		t.Errorf("profiles = %+v, want a single refreshed profile named %q", profiles, "cliente")
+	}
+}
+
+func TestRunLoginFailsWhenExplicitAliasBelongsToAnotherAccount(t *testing.T) {
+	env, _, errOut, home := newEnv(t)
+	saveProfile(t, home, opsAuth, "cliente")
+	env.RunLogin = func(LoginOptions) error {
+		return os.WriteFile(filepath.Join(home, "auth.json"), []byte(devAuth), 0o600)
+	}
+
+	code := Run([]string{"login", "--alias", "cliente"}, env)
+
+	if code != 1 {
+		t.Fatalf("Run(login --alias) = %d, want 1", code)
+	}
+	if !strings.Contains(errOut.String(), "apelido") {
+		t.Errorf("stderr = %q, want an alias-taken message", errOut.String())
+	}
+	if _, err := newStore(home).Find("dev@example.com"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Find(dev@example.com) error = %v, want the conflict to abort the save", err)
+	}
+}
+
+func TestRunSwitchWarnsWhenProfileTokenIsExpired(t *testing.T) {
+	env, out, errOut, home := newEnv(t)
+	expired := `{"https://auth.x.ai::client": {"email": "ops@example.com", "auth_mode": "oidc", "key": "tok-ops", "expires_at": "2026-09-16T11:00:00Z"}}`
+	saveProfile(t, home, expired, "ops")
+	writeLive(t, home, devAuth)
+
+	code := Run([]string{"switch", "ops"}, env)
+
+	if code != 0 {
+		t.Fatalf("Run(switch ops) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+	if !strings.Contains(errOut.String(), "expirou") || !strings.Contains(errOut.String(), "grok-accounts login") {
+		t.Errorf("stderr = %q, want an expired-token warning", errOut.String())
+	}
+	if !strings.Contains(out.String(), "Conta ativa agora") {
+		t.Errorf("stdout = %q, want the switch to go through", out.String())
+	}
+}
+
+func TestRunSwitchDoesNotWarnForValidToken(t *testing.T) {
+	env, _, errOut, home := newEnv(t)
+	saveProfile(t, home, devAuth, "dev")
+	writeLive(t, home, opsAuth)
+
+	if code := Run([]string{"switch", "dev"}, env); code != 0 {
+		t.Fatalf("Run(switch dev) = %d, want 0 (stderr: %s)", code, env.Stderr)
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("stderr = %q, want empty", errOut.String())
+	}
+}
+
+func TestRunListWarnsWhenAuthFileIsCorrupt(t *testing.T) {
+	env, out, errOut, home := newEnv(t)
+	saveProfile(t, home, opsAuth, "ops")
+	writeLive(t, home, "{broken")
+
+	code := Run([]string{"list"}, env)
+
+	if code != 0 {
+		t.Fatalf("Run(list) = %d, want 0", code)
+	}
+	if !strings.Contains(out.String(), "ops") {
+		t.Errorf("stdout = %q, want the profiles table", out.String())
+	}
+	if !strings.Contains(errOut.String(), "aviso") {
+		t.Errorf("stderr = %q, want a warning about the unreadable auth.json", errOut.String())
 	}
 }
 
