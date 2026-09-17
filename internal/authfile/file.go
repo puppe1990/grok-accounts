@@ -28,10 +28,23 @@ func WriteAtomic(path string, raw []byte) error {
 	if err == nil {
 		err = os.Rename(name, path)
 	}
+	if err == nil {
+		syncDir(dir)
+	}
 	if err != nil {
 		_ = os.Remove(name)
 	}
 	return err
+}
+
+// syncDir persiste a entrada de diretório criada pelo rename.
+func syncDir(dir string) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = f.Sync()
+	_ = f.Close()
 }
 
 func writeContents(f *os.File, raw []byte) error {

@@ -17,17 +17,25 @@ uso:
   grok-accounts current                 mostra a conta ativa
   grok-accounts add [--alias NOME]      salva a conta ativa como um perfil
   grok-accounts login [--alias NOME] [--device-auth]
+                      [--incognito [--browser NOME]]
                                         faz login no grok e salva o perfil
+                                        --incognito abre o login em janela anônima (macOS)
   grok-accounts switch <perfil|email>   troca a conta ativa
   grok-accounts remove <perfil|email>   remove um perfil salvo
 `
+
+type LoginOptions struct {
+	DeviceAuth bool
+	Incognito  bool
+	Browser    string
+}
 
 type Env struct {
 	GrokHome string
 	Stdout   io.Writer
 	Stderr   io.Writer
 	Now      func() time.Time
-	RunLogin func(deviceAuth bool) error
+	RunLogin func(opts LoginOptions) error
 }
 
 func Run(args []string, env Env) int {
@@ -74,6 +82,13 @@ func ResolveGrokHome(getenv func(string) string) (string, error) {
 		return "", fmt.Errorf("HOME não definido e GROK_HOME vazio")
 	}
 	return filepath.Join(home, ".grok"), nil
+}
+
+func (env Env) now() time.Time {
+	if env.Now == nil {
+		return time.Now()
+	}
+	return env.Now()
 }
 
 func (env Env) store() *store.Store {
